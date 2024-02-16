@@ -1,0 +1,1 @@
+../../bin/MicroarrayGEOPipeline-ConsultaPrueba_v0.6.py

@@ -1,0 +1,16 @@
+	TaxId	Rank	Specie	ScientificName
+0	572477	species	Allochromatium vinosum	Allochromatium vinosum DSM 180
+1	511145	strain	Escherichia coli	Escherichia coli str. K-12 substr. MG1655
+2	562	genus	Escherichia coli	Escherichia coli
+3	196627	species	Corynebacterium glutamicum	Corynebacterium glutamicum ATCC 13032
+4	290633	species	Gluconobacter oxydans	Gluconobacter oxydans 621H
+5	272942	species	Rhodobacter capsulatus	Rhodobacter capsulatus SB 1003
+6	160488	species	Pseudomonas putida	Pseudomonas putida KT2440
+7	224308	subspecies	Bacillus subtilis	Bacillus subtilis subsp. subtilis str. 168
+8	208964	species	Pseudomonas aeruginosa	Pseudomonas aeruginosa PAO1
+9	1423	species group	Bacillus subtilis	Bacillus subtilis
+10	303	species group	Pseudomonas putida	Pseudomonas putida
+11	5061	subgenus	Aspergillus niger	Aspergillus niger
+12	442	genus	Gluconobacter oxydans	Gluconobacter oxydans
+13	1718	genus	Corynebacterium glutamicum	Corynebacterium glutamicum
+14	679895	strain	Escherichia coli	Escherichia coli BW25113
