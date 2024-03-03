@@ -10,13 +10,14 @@ import argparse
 import logging
 import os
 from utils_query import *
+from sys import stdout
 
 
 ### MAIN ###
 # Log config
 total_time = time.time()
 os.system("export GEOPARSE_USE_HTTP_FOR_FTP=yes")
-logging.basicConfig(format='%(asctime)s %(message)s', datefmt='[%m/%d/%Y %I:%M:%S %p]', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s %(message)s', datefmt='[%m/%d/%Y %I:%M:%S %p]', level=logging.INFO, stream=stdout)
 sep = \
 """
 ##############################################################################
