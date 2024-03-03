@@ -186,7 +186,7 @@ def get_GEO(geo_id:str, path:str, remove:bool=False, tries:int=10):
         logging.warning(f"Unable to parse {geo_id}") ; return(None)
     return(geo)
 
-def save_table(geo:GEOparse.GPL|GEOparse.GSE|GEOparse.GSM, path:str, **kwargs):
+def save_table(geo, path:str, **kwargs):
     try:
         geo.table.to_csv(f"{path}", **kwargs)
         logging.info(f"{geo.name} table saved")
