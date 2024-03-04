@@ -14,7 +14,8 @@ from utils_download import *
 from utils_query import format_time
 import logging
 from time import time
-logging.basicConfig(format='%(asctime)s %(message)s', datefmt='[%m/%d/%Y %I:%M:%S %p]', level=logging.INFO)
+from sys import stdout
+logging.basicConfig(format='%(asctime)s %(message)s', datefmt='[%m/%d/%Y %I:%M:%S %p]', level=logging.INFO, stream=stdout)
 
 # Parse args
 parser = argparse.ArgumentParser()
@@ -36,7 +37,8 @@ total_time = time()
 # Read table
 logging.info(f"Reading data from {args.input}...")
 data = pd.read_csv(args.input, sep='\t', usecols=["TaxId", "GPL_geo_accession", "GPL_manufacturer" , "GSM_supplementary_file",
-                                                   "GSM_geo_accession", "GPL_distribution"])
+                                                   "GSM_geo_accession", "GPL_distribution", "GPL_supplementary_file"])
+
 
 # Merge taxonomy relations
 if args.taxrel:
@@ -105,7 +107,7 @@ logging.info(f"{data[~data.is_processable].shape[0]} files were classified as mi
 logging.info(f"{sum(processable.is_downloaded)}/{total} files were downloaded in {format_time(time()-supp_time)}!")
 logging.info(f"Recovery: {sum(processable.is_downloaded)*100/total}%")
 logging.info(f"Total time: {format_time(time()-total_time)}!")
-logging.info(f"Saving Paths table to {(temp :=  join(args.outdir, "downloadPaths.tsv"))}")
+logging.info(f"Saving Paths table to {(temp :=  join(args.outdir, 'downloadPaths.tsv'))}")
 processable = processable.drop(["Files", "GEO_file_path"], axis=1)
 processable.to_csv(temp, index=False, sep='\t')
 logging.info("Done!")
