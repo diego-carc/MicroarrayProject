@@ -16,14 +16,18 @@ parser <- add_option(parser, opt_str = c("--cel", "-i"),
 parser <- add_option(parser, opt_str = c("--cdf", "-c"),
                      type = "character", default = NULL,
                      help = "Path to affymetrix CDF file")
+parser <- add_option(parser, opt_str = c("--out", "-o"),
+                     type = "character",
+                     help("File path and name to print output matrix"))
 args <- parse_args(parser)
 
-# Load cdf env
-if (args$cdf) {
-  gpl <- makecdfenv(args$cdf)
-  data <- ReadAffy(args$cel, cdf_name = gpl)
-} else {
-  data <- ReadAffy(args$cel)
-}
+# Load cdf env. When cdf is NULL, ReadAffy searches for the annotation package
+gpl <- if (args$cdf) make.cdf.env(args$cdf) else NULL
+
+# Parse data
+data <- ReadAffy(args$cel, cdfname = "gpl")
+
+# Annotate data using cdf environment 
+data <- rma(ReadAffy)
 
 write.table(exprs(data), sep = "\t")
