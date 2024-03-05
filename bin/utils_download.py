@@ -150,7 +150,7 @@ def is_processable(row):
         if man == "Affymetrix" and re.search(r"\.cel|\.exp", smfile, flags=re.IGNORECASE) : procesable = True
         if man == "Agilent" and re.search(r"\.txt", smfile, flags=re.IGNORECASE): procesable = True
         if man == "NimbleGen" and re.search(r"\.pair|\.xys", smfile, flags=re.IGNORECASE): procesable = True
-        if man == "Illumina" and re.search(r"\.idat", smfile, flags=re.IGNORECASE): procesable = True
+        #if man == "Illumina" and re.search(r"\.idat", smfile, flags=re.IGNORECASE): procesable = True
     return(procesable)
 
 def get_GEO(geo_id:str, path:str, remove:bool=False, tries:int=10):
