@@ -1,17 +1,124 @@
 """
 
 """
-import os
 import pandas as pd
 import numpy as np
 import re
+import logging
+from sys import stdout
+logging.basicConfig(format='%(asctime)s %(message)s', datefmt='[%m/%d/%Y %I:%M:%S %p]', level=logging.INFO, stream=stdout)
 
 class ColumnNameError(Exception):
     pass
 
 class EncodingError(Exception):
     pass
-     
+
+class MicroarrayFileFormatError(Exception):
+    pass
+
+class Microarray():
+    import pandas as pd
+    from utils_download import File
+    import re
+    
+    def __init__(self, dataFilePath:str, annotFilePath:str,
+                 GSM:str=None, annotCols:set={}, dataCols:set={}):
+        
+        # Sample identifier
+        self.GSM =  GSM if GSM else self.re.search(r"(GSM\d+)", dataFilePath).group()
+        logging.debug(f"Microarray sample name is: {self.GSM}")
+
+        # File with expression data
+        self.dataFile = self.File(dataFilePath)
+        logging.debug(f"Microarray data file is: {self.dataFile.filePath}")
+
+        # File with gene annotation data
+        self.annotFile = self.File(annotFilePath)
+        logging.debug(f"Microarray annot file is: {self.annotFile.filePath}")
+
+        # Columns with expression and gene data
+        self.annotCols = annotCols
+        self.dataCols = dataCols
+        logging.debug(f"Columns are {self.annotCols} and {self.dataCols}")
+
+        # DataFrames with Microarray data
+        self.expressionData = self.parseRawData()
+        logging.debug(f"Raw data parsed")
+        self.annotationData = None
+        logging.debug(f"Annot data parsed")
+    
+        logging.debug("Microarray init succesful")
+    
+    def parseRawData(self, **kwargs) -> pd.DataFrame:
+        """ Parse a tab delimited file
+
+        _extended summary_[#_unique ID_]_
+
+
+        Returns:
+            pd.DataFrame: DataFrame containing the parsed file
+
+        References:
+            .. [#_unique ID_] _pubmed abbr journal title_ _vol_:_page or e-article id_ (_year_) https://doi.org/_doi_
+            .. [#_unique ID_] _first-author first-name last-name_ _book title_ (_year_) ISBN:_ISBN_ _http link_
+            .. [#_unique ID_] _article title_ _conference_ (_year_) _http link_"""
+        try:
+            file = self.pd.read_csv(self.dataFile.filePath, sep='\t', **kwargs)
+        except UnicodeDecodeError:
+            file = self.pd.read_csv(self.dataFile.filePath, sep='\t', encoding="latin-1", **kwargs)
+        finally:
+            logging.debug(f"{self.dataFile.filePath} parsed")
+            return file
+
+class Agilent(Microarray):
+    def __init__(self, dataFilePath:str, annotFilePath:str=""):
+        super().__init__(dataFilePath = dataFilePath,
+                         annotFilePath = annotFilePath,
+                         annotCols={"SystematicName", "GeneName"},
+                         dataCols={"rMedianSignal", "gMedianSignal"})
+        logging.debug("Agilent Microarray init succesful")
+
+
+    def parseRawData(self) -> pd.DataFrame:
+        # Check if file has Agilent format
+        if self.dataFile.readChars(3) != "TYP": 
+            raise MicroarrayFileFormatError(f"{self.dataFile.filePath} might not be an Agilent File")
+        
+        # Parse file
+        rawData = super().parseRawData(skiprows=range(9)).rename(columns=lambda col : col.replace(' ',''))
+        logging.debug(f"Raw data parsed")
+
+        # Filter control probes & select columns
+        rawData = rawData[rawData.ControlType == 0][list(set(rawData.columns) & (self.annotCols | self.dataCols))]
+        logging.debug(f"Control probes filtered and colums selected")
+        
+        # Delete redundancies and rename
+        if "SystematicName" in rawData.columns:
+            if "GeneName" in rawData.columns:
+                rawData = rawData.drop("GeneName", axis=1)
+            else:
+                rawData = rawData.groupby(default).mean().rename(columns=lambda col : f"{col[0]}{self.GSM}")
+                logging.debug("Redundancies meaned")
+        raise ColumnNameError("The Agilent File does not contain any of SystematicName or GeneName")
+
+        return rawData
+    
+    def parseAnnotData(self):
+        pass
+
+class Affymetrix(Microarray):
+    def __init__(self, dataFilePath, annotFilePath):
+        super().__init__(dataFilePath, annotFilePath)
+    
+class NimbleGen(Microarray):
+    def __init__(self, dataFilePath, annotFilePath):
+        super().__init__(dataFilePath, annotFilePath)
+
+class GenePix(Microarray):
+    def __init__(self, dataFilePath, annotFilePath):
+        super().__init__(dataFilePath, annotFilePath)
+
 class Parser:
 
     def __init__(self, filePath, probeCol, dataCol):
@@ -61,19 +168,10 @@ class Parser:
 
     
 class Affymetrix(Parser):
-    pass
-
-class Agilent(Parser):
     
-    def __init__(self, filePath):
-        for p,d in [("ProbeName", "gMedianSignal"), ("ID", "Raw intensity (med) {532}"), ("Name", "F532 Median"),
-                    ("Name", "Signal Median"), ("ID", "F635 Median")]:
-            try: 
-                super().__init__(filePath, p, d)
-            except ColumnNameError: pass 
+    def __init__(self, filePath, probeCol, dataCol):
+        super().__init__(filePath, probeCol, dataCol)
 
-    def parseFile(self):
-       return super().parseFile()
     
 class NimbleGen(Parser):
     
@@ -94,13 +192,16 @@ class Illumina(Parser):
 class Miscelaneous(Parser):
     pass
 
-def quantile_normalize(df):
-    """
-    input: dataframe with numerical columns
-    output: dataframe with quantile normalized values
-    """
-    df_sorted = pd.DataFrame(np.sort(df.values, axis=0), index=df.index, columns=df.columns)
-    df_mean = df_sorted.mean(axis=1)
-    df_mean.index = np.arange(1, len(df_mean) + 1)
-    df_qn =df.rank(method="min").stack().astype(int).map(df_mean).unstack()
-    return(df_qn)
+class MicroarrayBatch():
+    
+    def quantile_normalize(self):
+        df = self
+        """
+        input: dataframe with numerical columns
+        output: dataframe with quantile normalized values
+        """
+        df_sorted = pd.DataFrame(np.sort(df.values, axis=0), index=df.index, columns=df.columns)
+        df_mean = df_sorted.mean(axis=1)
+        df_mean.index = np.arange(1, len(df_mean) + 1)
+        df_qn =df.rank(method="min").stack().astype(int).map(df_mean).unstack()
+        return(df_qn)
