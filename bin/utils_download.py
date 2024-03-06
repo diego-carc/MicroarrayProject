@@ -52,6 +52,15 @@ class File:
                 copyfileobj(gz, out)
         self.remove()
         self.filePath = temp
+    
+    def readChars(self, n):
+        try:
+            with open(self.filePath) as file:
+                temp = file.read(n)
+        except UnicodeDecodeError: 
+            with open(self.filePath, encoding="latin-1") as file:
+                temp = file.read(n)
+        finally: return temp
 
 
 class GEOFile(File):
