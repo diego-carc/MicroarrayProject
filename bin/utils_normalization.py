@@ -22,12 +22,15 @@ class Microarray():
     from utils_download import File
     import re
     
-    def __init__(self, dataFilePath:str, annotFilePath:str,
-                 GSM:str=None, annotCols:set={}, dataCols:set={}):
+    def __init__(self, dataFilePath:str, annotFilePath:str, GSM:str=None,
+                 oneChannel:bool=True, annotCols:set={}, dataCols:set={}):
         
         # Sample identifier
         self.GSM =  GSM if GSM else self.re.search(r"(GSM\d+)", dataFilePath).group()
         logging.debug(f"Microarray sample name is: {self.GSM}")
+
+        # Channel count
+        self.oneChannel = oneChannel
 
         # File with expression data
         self.dataFile = self.File(dataFilePath)
@@ -72,15 +75,47 @@ class Microarray():
             return file
 
 class Agilent(Microarray):
-    def __init__(self, dataFilePath:str, annotFilePath:str=""):
+    def __init__(self, dataFilePath:str, annotFilePath:str="", oneChannel:bool=True):
+        """ Initiates an Agilent Microarray object
+
+        _extended summary_[#_unique ID_]_
+
+        
+        Arguments:
+            dataFilePath (str): _description_
+            annotFilePath (str): _description_. Defaults to "".
+            oneChannel (bool): _description_. Defaults to True.
+
+        References:
+            .. [#_unique ID_] _pubmed abbr journal title_ _vol_:_page or e-article id_ (_year_) https://doi.org/_doi_
+            .. [#_unique ID_] _first-author first-name last-name_ _book title_ (_year_) ISBN:_ISBN_ _http link_
+            .. [#_unique ID_] _article title_ _conference_ (_year_) _http link_"""
+        
         super().__init__(dataFilePath = dataFilePath,
                          annotFilePath = annotFilePath,
+                         oneChannel = oneChannel, 
                          annotCols={"SystematicName", "GeneName"},
                          dataCols={"rMedianSignal", "gMedianSignal"})
         logging.debug("Agilent Microarray init succesful")
 
 
     def parseRawData(self) -> pd.DataFrame:
+        """Reads Agilent Microarray supplementary files
+
+        _extended summary_[#_unique ID_]_
+
+
+        Raises:
+            MicroarrayFileFormatError: _description_
+
+        Returns:
+            pd.DataFrame: _description_
+
+        References:
+            .. [#_unique ID_] _pubmed abbr journal title_ _vol_:_page or e-article id_ (_year_) https://doi.org/_doi_
+            .. [#_unique ID_] _first-author first-name last-name_ _book title_ (_year_) ISBN:_ISBN_ _http link_
+            .. [#_unique ID_] _article title_ _conference_ (_year_) _http link_"""
+        
         # Check if file has Agilent format
         if self.dataFile.readChars(3) != "TYP": 
             raise MicroarrayFileFormatError(f"{self.dataFile.filePath} might not be an Agilent File")
@@ -93,15 +128,13 @@ class Agilent(Microarray):
         rawData = rawData[rawData.ControlType == 0][list(set(rawData.columns) & (self.annotCols | self.dataCols))]
         logging.debug(f"Control probes filtered and colums selected")
         
-        # Delete redundancies and rename
-        if "SystematicName" in rawData.columns:
-            if "GeneName" in rawData.columns:
-                rawData = rawData.drop("GeneName", axis=1)
-            else:
-                rawData = rawData.groupby(default).mean().rename(columns=lambda col : f"{col[0]}{self.GSM}")
-                logging.debug("Redundancies meaned")
-        raise ColumnNameError("The Agilent File does not contain any of SystematicName or GeneName")
-
+        # Select annotation column
+        if not (annot:="SystematicName") in rawData.columns: annot = "GeneName"
+        elif "GeneName" in rawData.columns: rawData = rawData.drop("GeneName", axis=1) 
+        
+        # Mean redundancies and rename (only two channel)
+        rawData = rawData.groupby(annot).mean().rename(columns=lambda col : self.GSM if (self.oneChannel) else  f"{self.GSM}_{col[0]}") 
+        logging.debug("Redundancies meaned")
         return rawData
     
     def parseAnnotData(self):
@@ -112,8 +145,15 @@ class Affymetrix(Microarray):
         super().__init__(dataFilePath, annotFilePath)
     
 class NimbleGen(Microarray):
-    def __init__(self, dataFilePath, annotFilePath):
-        super().__init__(dataFilePath, annotFilePath)
+    def __init__(self, dataFilePath: str, annotFilePath: str, GSM: str = None,
+                  oneChannel: bool = True, annotCols: set = {}, dataCols: set = {}):
+        
+        super().__init__(dataFilePath = dataFilePath,
+                         annotFilePath = annotFilePath,
+                         GSM = GSM,
+                         oneChannel = oneChannel,
+                         annotCols = {},
+                         dataCols = {})
 
 class GenePix(Microarray):
     def __init__(self, dataFilePath, annotFilePath):
