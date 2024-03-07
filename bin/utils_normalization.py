@@ -149,7 +149,7 @@ class Affymetrix(Microarray):
 class NimbleGen(Microarray):
     def __init__(self, dataFilePath: str, annotFilePath: str='', oneChannel: bool = True):
         # Determine file format
-        self.frmt = self.os.path.splitext(dataFilePath)[-1].lower()
+        self.frmt = super().os.path.splitext(dataFilePath)[-1].lower()
         if self.frmt != ".pair" and self.frmt != ".xys": 
             raise MicroarrayFileFormatError(f"{dataFilePath} migth not a NimbleGen file")
         logging.debug(f"{dataFilePath} has {self.frmt} format")
