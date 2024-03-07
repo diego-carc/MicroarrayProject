@@ -21,6 +21,8 @@ class Microarray():
     import pandas as pd
     from utils_download import File
     import re
+    import os
+    
     
     def __init__(self, dataFilePath:str, annotFilePath:str, GSM:str=None,
                  oneChannel:bool=True, annotCols:set={}, dataCols:set={}):
@@ -141,19 +143,62 @@ class Agilent(Microarray):
         pass
 
 class Affymetrix(Microarray):
-    def __init__(self, dataFilePath, annotFilePath):
-        super().__init__(dataFilePath, annotFilePath)
+    def __init__(self, dataFilePath: str, annotFilePath: str, GSM: str = None, oneChannel: bool = True, annotCols: set = {}, dataCols: set = {}):
+        super().__init__(dataFilePath, annotFilePath, GSM, oneChannel, annotCols, dataCols)
     
 class NimbleGen(Microarray):
-    def __init__(self, dataFilePath: str, annotFilePath: str, GSM: str = None,
-                  oneChannel: bool = True, annotCols: set = {}, dataCols: set = {}):
-        
+    def __init__(self, dataFilePath: str, annotFilePath: str='', oneChannel: bool = True):
+        # Determine file format
+        self.frmt = self.os.path.splitext(dataFilePath)[-1].lower()
+        if self.frmt != ".pair" and self.frmt != ".xys": 
+            raise MicroarrayFileFormatError(f"{dataFilePath} migth not a NimbleGen file")
+        logging.debug(f"{dataFilePath} has {self.frmt} format")
+
+        # Choose proper columns
+        if self.frmt == ".pair":
+            annotCols = {"SEQ_ID"}
+            dataCols= {"PM"}
+        elif self.frmt == ".xys":
+            annotCols = {"X", "Y"}
+            dataCols = {"SIGNAL"}
+        logging.debug(f"{dataFilePath} columns are {annotCols | dataCols}")
+
+        # Init Microarray
         super().__init__(dataFilePath = dataFilePath,
                          annotFilePath = annotFilePath,
-                         GSM = GSM,
                          oneChannel = oneChannel,
-                         annotCols = {},
-                         dataCols = {})
+                         annotCols = annotCols,
+                         dataCols = dataCols)
+        logging.debug("NimbleGen init succesful")
+
+    def parseRawData(self) -> pd.DataFrame:
+        # Count rows to skip
+        commentLines = 1 if self.dataFile.readChars(1) == "#" else 0
+        logging.debug(f"{self.dataFile.filePath} has {commentLines} comment lines")
+        
+        # Read file
+        rawData = super().parseRawData(skiprows = range(commentLines))
+        logging.debug(f"{self.dataFile.filePath} read succesfully")
+
+        # Delete RANDOM probes
+        if self.frmt == ".pair":
+            rawData = rawData[rawData.GENE_EXPR_OPTION != "RANDOM"]
+            logging.debug("RANDOM probes deleted")
+        else: pass
+
+        # Select Columns
+        rawData = rawData[list(set(rawData.columns) & (self.annotCols | self.dataCols))]
+        logging.debug(f"Columns are {rawData.columns}")
+        if self.frmt == ".pair":
+            annot = list(self.annotCols)[0]
+        elif self.frmt == ".xys":
+            annot = "COORDS"
+            rawData["COORDS"] = rawData.apply(lambda row: '_'.join([str(int(row.X)), str(int(row.Y))]),axis=1)
+            rawData = rawData.drop(["X", "Y"], axis=1).dropna()
+        logging.debug(f"Annot column is {annot}")
+
+        # Mean redundancies and rename
+        return rawData.groupby(annot).mean().rename(columns=lambda col: self.GSM)
 
 class GenePix(Microarray):
     def __init__(self, dataFilePath, annotFilePath):
@@ -213,7 +258,7 @@ class Affymetrix(Parser):
         super().__init__(filePath, probeCol, dataCol)
 
     
-class NimbleGen(Parser):
+class oldNimbleGen(Parser):
     
     def __init__(self, filePath, probeCol = "PROBE_ID", dataCol="PM"):
         super().__init__(filePath, probeCol, dataCol)
