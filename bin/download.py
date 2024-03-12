@@ -7,7 +7,7 @@ FTP README https://ftp.ncbi.nlm.nih.gov/geo/README.txt
 '''
 # Import modules
 from os import listdir, makedirs
-from os.path import join, abspath, split
+from os.path import join, abspath, split, isfile
 import argparse
 import pandas as pd
 from utils_download import *
@@ -37,7 +37,7 @@ total_time = time()
 # Read table
 logging.info(f"Reading data from {args.input}...")
 data = pd.read_csv(args.input, sep='\t', usecols=["TaxId", "GPL_geo_accession", "GPL_manufacturer" , "GSM_supplementary_file",
-                                                   "GSM_geo_accession", "GPL_distribution", "GPL_supplementary_file"])
+                                                   "GSM_geo_accession", "GSM_channel_count", "GPL_distribution", "GPL_supplementary_file"])
 
 
 # Merge taxonomy relations
@@ -45,11 +45,17 @@ if args.taxrel:
     logging.info("Merging taxonomy relations")
     data = data.merge(pd.read_csv(args.taxrel, sep='\t', usecols=["TaxId", "Specie"]))
 
-# Make a row for each supplementary file
+# Make a row for each GSM supplementary file
 logging.info("Solving multiple supplementary files...")
-files = [{**row, "GEO_file_path" : f} for i,row in data.iterrows() for f in row.GSM_supplementary_file.split(';')]
+files = [{**row, "GEO_file_path" : f} for _,row in data.iterrows() for f in row.GSM_supplementary_file.split(';')]
 files = [{k:v for k,v in file.items() if k != "GSM_supplementary_file"} for file in files]
-data = pd.DataFrame.from_dict(files)
+data = pd.DataFrame.from_dict(files).drop_duplicates()
+logging.info("Done!")
+
+# Make a list of GPL supplementary files / Select only NDF and CDF files
+logging.info("Selecting GPL supplementary files...")
+gplSupps = pd.DataFrame.from_dict([{"GPL_geo_accession": row.GPL_geo_accession, "GPL_supplementary_file":file} for _,row in data[["GPL_geo_accession", "GPL_supplementary_file"]].drop_duplicates().iterrows() 
+            if type(files := row.GPL_supplementary_file) != float for file in files.split(";") if ".cdf" in (temp:=file.lower()) or ".ndf" in temp])
 logging.info("Done!")
 
 # Determine processability
@@ -67,19 +73,27 @@ getLocalPath = lambda row : abspath(join(args.outdir if row.is_processable else 
 data["Local_path"] = data.apply(getLocalPath, axis=1)
 logging.info("Done!")
 
-# Create file objects
+# Create GSM file objects
 logging.info("Preparing download...")
 processable = data[(data.is_processable | args.misc)]
 processable["Files"] = processable.apply(lambda row: GEOFile(row.Local_path, row.GEO_file_path), axis=1)
 logging.info("Done!")
 
-# Download supplementary files
+# Create GPL file objects
+logging.info("Preparing GPL supp download...")
+gplSupps["Files"] = gplSupps.apply(lambda row: GEOFile(abspath(join(args.outdir, "GPL_supplementary_files")),
+                                                       row.GPL_supplementary_file),
+                                                       axis=1)           
+logging.info("Done!")
+
+# Download GSM supplementary files
 supp_time = time()
 ftp = None
 total = processable.shape[0]
 for i,f in enumerate(processable[processable.GEO_file_path != "NONE"].Files):
     logging.info(f"Downloading file {i+1}/{total}..")
     makedirs(split(f.filePath)[0], exist_ok=True)
+    if isfile(f.filePath.strip(".gz")): logging.info(f"{f.filePath} already downloaded"); continue
     ftp = f.download(ftp, close=False)
 if ftp: ftp.quit()
 logging.info("Download completed!")
@@ -87,6 +101,21 @@ logging.info("Download completed!")
 # Count downloaded
 processable["File_name"] = processable.Files.apply(lambda f: f.name)
 processable["is_downloaded"] = processable.Files.apply(lambda f: f.is_downloaded())
+
+# Download GPL supplementary files
+totalGPL = len(gplSupps)
+for i,gpl in enumerate(gplSupps.Files):
+    logging.info(f"Downloading file: {i+1}/{totalGPL}")
+    makedirs(split(gpl.filePath)[0], exist_ok=True)
+    ftp = gpl.download(ftp, close=False)
+if ftp: ftp.quit()
+logging.info("Download completed!")
+
+## Prepare to join to processable
+gplSupps["GPL_supplementary_file"] = gplSupps["Files"].apply(lambda file: file.filePath)
+gplSupps["GPL_downloaded"] = gplSupps["Files"].apply(lambda file: file.is_downloaded())
+gplSupps = gplSupps.drop("Files", axis=1)
+
 
 # Get GPL tables
 logging.info("Downloading GPL tables...")
@@ -101,13 +130,19 @@ gpl_end = time()
 logging.info("GPL tables download!")
 
 # Report
+logging.info("\n########### Report #############")
 logging.info(f"{len(listdir(gpl_dir))} GPL tables downloaded in {format_time(gpl_end - gpl_time)}")
 logging.info(f"{data[data.is_processable].shape[0]} files were classified as processable")
 logging.info(f"{data[~data.is_processable].shape[0]} files were classified as miscelaneous (no processable)")
+logging.info(f"Processables: {data[data.is_processable].shape[0] * 100 / data.shape[0]}")
 logging.info(f"{sum(processable.is_downloaded)}/{total} files were downloaded in {format_time(time()-supp_time)}!")
-logging.info(f"Recovery: {sum(processable.is_downloaded)*100/total}%")
+logging.info(f"Recovery: {sum(processable.is_downloaded)*100/sum(processable.is_processable)}%")
+logging.info(f"GPL supps downloaded: {sum(gplSupps.GPL_downloaded)}")
+logging.info(f"GPL supps downloaded: {sum(gplSupps.GPL_downloaded) * 100 / gplSupps.shape[0]}%")
 logging.info(f"Total time: {format_time(time()-total_time)}!")
 logging.info(f"Saving Paths table to {(temp :=  join(args.outdir, 'downloadPaths.tsv'))}")
-processable = processable.drop(["Files", "GEO_file_path"], axis=1)
+processable = processable.drop(["Files", "GEO_file_path", "GPL_supplementary_file"], axis=1).merge(gplSupps, how="outer")
+processable["GPL_supplementary_file"] = processable.GPL_supplementary_file.fillna("None")
+processable["GPL_downloaded"] = processable.GPL_downloaded.fillna(False)
 processable.to_csv(temp, index=False, sep='\t')
 logging.info("Done!")
