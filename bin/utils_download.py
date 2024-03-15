@@ -17,9 +17,12 @@ class DiskUsageError(Exception):
     pass
 
 class File:
+    import os
     
     def __init__(self, filePath):
-        self.filePath = os.path.abspath(filePath)
+
+        self.filePath = filePath if self.os.path.isabs(filePath) or not filePath else self.os.path.abspath(filePath)
+
         self.total_size = None
         
     def exists(self):
@@ -156,7 +159,7 @@ def is_processable(row):
     if type(smfile) == float or type(man) == float or type(dist) == float: pass
     elif re.search(r'norm_RMA', smfile, flags=re.IGNORECASE): pass
     elif dist == "commercial" or dist == "custom-commercial": 
-        if man == "Affymetrix" and re.search(r"\.cel|\.exp", smfile, flags=re.IGNORECASE) : procesable = True
+        if man == "Affymetrix" and re.search(r"\.cel", smfile, flags=re.IGNORECASE) : procesable = True
         if man == "Agilent" and re.search(r"\.txt", smfile, flags=re.IGNORECASE): procesable = True
         if man == "NimbleGen" and re.search(r"\.pair|\.xys", smfile, flags=re.IGNORECASE): procesable = True
         if re.search(r"\.gpr", smfile, flags=re.IGNORECASE) : procesable = True
