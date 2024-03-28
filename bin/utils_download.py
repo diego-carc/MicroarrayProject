@@ -29,13 +29,13 @@ class File:
         return(os.path.isfile(self.filePath))
     
     def is_corrupted(self):
-        if not self.exists() or (os.path.getsize(self.filePath) - self.total_size):
+        if not self.exists() or (self.os.path.getsize(self.filePath) - self.total_size):
             return(True)
         return(False)
     
     def remove(self):
-        if self.exists(): os.remove(self.filePath)
-        else: logging.warning(f"{self.name} does not exist.")
+        if self.exists(): self.os.remove(self.filePath)
+        else: logging.warning(f"{self.filePath} does not exist.")
     
     def is_gzip(self):
         if not self.exists(): 
